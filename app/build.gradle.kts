@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "ro.alexmamo.roomjetpackcompose"
+    namespace = "ro.alexmamo.businessmanager"
     compileSdk = 35
 
     defaultConfig {
