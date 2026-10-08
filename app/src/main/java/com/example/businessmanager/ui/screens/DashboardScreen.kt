@@ -64,7 +64,11 @@ import java.util.Calendar
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DashboardScreen(widthClass: WindowWidthSizeClass, onNavigate: (String) -> Unit) {
+fun DashboardScreen(
+    widthClass: WindowWidthSizeClass,
+    onNavigate: (String) -> Unit,
+    recentInvoices: List<EntityRow> = emptyList()
+) {
     val wide = widthClass != WindowWidthSizeClass.Compact
     val constraints = remember(wide) { dashboardConstraints(wide) }
     val cs = MaterialTheme.colorScheme
@@ -78,17 +82,17 @@ fun DashboardScreen(widthClass: WindowWidthSizeClass, onNavigate: (String) -> Un
         ConstraintLayout(constraintSet = constraints, modifier = Modifier.fillMaxWidth()) {
             WelcomeBanner(Modifier.layoutId("banner"))
 
-            KpiCard(Modifier.layoutId("sales"), "Sales this month", "128,400 $CURRENCY", "+12.4% vs last month",
+            KpiCard(Modifier.layoutId("sales"), "Sales this month", "0 $CURRENCY", "No data yet",
                 Icons.Outlined.TrendingUp, cs.primary, cs.primaryContainer)
-            KpiCard(Modifier.layoutId("purchases"), "Purchases", "74,950 $CURRENCY", "+3.1% vs last month",
+            KpiCard(Modifier.layoutId("purchases"), "Purchases", "0 $CURRENCY", "No data yet",
                 Icons.Outlined.TrendingDown, cs.secondary, cs.secondaryContainer)
-            KpiCard(Modifier.layoutId("unpaid"), "Unpaid invoices", "21,830 $CURRENCY", "4 invoices overdue",
+            KpiCard(Modifier.layoutId("unpaid"), "Unpaid invoices", "0 $CURRENCY", "No unpaid invoices",
                 Icons.Outlined.Receipt, cs.tertiary, cs.tertiaryContainer)
-            KpiCard(Modifier.layoutId("lowStock"), "Low stock", "7 products", "2 out of stock",
+            KpiCard(Modifier.layoutId("lowStock"), "Low stock", "0 products", "Stock is fine",
                 Icons.Outlined.Warning, Color(0xFFB3261E), Color(0xFFFFDAD6))
 
             QuickActions(Modifier.layoutId("actions"), onNavigate)
-            RecentInvoices(Modifier.layoutId("recent")) { onNavigate(Destinations.SALES) }
+            RecentInvoices(Modifier.layoutId("recent"), recentInvoices) { onNavigate(Destinations.SALES) }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -299,8 +303,7 @@ private fun QuickActions(modifier: Modifier, onNavigate: (String) -> Unit) {
 }
 
 @Composable
-private fun RecentInvoices(modifier: Modifier, onSeeAll: () -> Unit) {
-    val rows = remember { sampleRows("invoices") }
+private fun RecentInvoices(modifier: Modifier, rows: List<EntityRow>, onSeeAll: () -> Unit) {
     Box(modifier.padding(6.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -322,6 +325,29 @@ private fun RecentInvoices(modifier: Modifier, onSeeAll: () -> Unit) {
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = onSeeAll) { Text("See all") }
+                }
+                if (rows.isEmpty()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.Receipt, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Text(
+                            "No invoices yet",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 12.dp)
+                        )
+                        Text(
+                            "Add your first invoice to see it here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 rows.forEachIndexed { index, row ->
                     EntityRowItem(row, Icons.Outlined.Receipt)
