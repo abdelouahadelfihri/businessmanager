@@ -8,62 +8,62 @@ plugins {
 }
 
 android {
-    namespace = "ro.alexmamo.businessmanager"
+    namespace = "com.example.businessmanager"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ro.alexmamo.roomjetpackcompose"
+        applicationId = "com.example.businessmanager"
         minSdk = 21
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "ro.alexmamo.roomjetpackcompose.HiltTestRunner"
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_21.toString()
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.compose.get()
-    }
+    // composeOptions removed: the Compose compiler plugin handles it
 }
+
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2025.01.00") // use the latest BOM
-    implementation(composeBom)
+    // Compose (single BOM)
+    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.compose.material)
+
     implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    //Compose
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.material)
-    //Navigation
+
+    // Navigation
     implementation(libs.navigation.compose)
-    //Hilt Navigation Compose
     implementation(libs.hilt.navigation.compose)
-    //Hilt
+
+    // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
-    //Room
+
+    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
-    //Serialization
+
+    // Serialization
     implementation(libs.serialization)
-    //Tests
+
+    // Tests (unchanged)
     androidTestImplementation(libs.navigation.testing)
     androidTestImplementation(libs.hilt.android.testing)
     androidTestImplementation(libs.runner)
