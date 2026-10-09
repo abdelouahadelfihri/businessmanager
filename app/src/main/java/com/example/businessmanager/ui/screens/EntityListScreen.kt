@@ -55,7 +55,7 @@ import com.example.businessmanager.ui.navigation.EntityTab
  *  - Search with no match : short "no results" message.
  *  - Responsive: the grid adds columns as the width grows.
  *
- * Wiring example (inside ModuleScreen's `rowsFor`):
+ * Wiring example (inside BizApp's `rowsFor` parameter):
  *   "invoices"    -> db.invoiceDao().observeAll().collectAsState(emptyList()).value.map { it.toRow() }
  *   "payments_in" -> db.paymentDao().observeByDirection("IN")...
  */
