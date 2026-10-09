@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
@@ -26,6 +30,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LeadingIconTab
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -37,6 +42,7 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -56,61 +62,96 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.bizapp.ui.screens.DashboardScreen
-import com.example.bizapp.ui.screens.ModuleScreen
+import androidx.navigation.navArgument
+import com.example.businessmanager.ui.screens.ChainScreen
+import com.example.businessmanager.ui.screens.DashboardScreen
+import com.example.businessmanager.ui.screens.EntityListScreen
+import com.example.businessmanager.ui.screens.EntityRow
 import kotlinx.coroutines.launch
 
+private const val HOME = "home"
+private const val ENTITY_ROUTE = "entity/{key}"
+private fun entityRoute(key: String) = "entity/$key"
+
 /**
- * Root composable. The navigation chrome adapts to the window width:
- *  - Compact  (phones)          -> modal drawer (hamburger button)
- *  - Medium   (foldables)       -> navigation rail
- *  - Expanded (tablets/desktop) -> permanent drawer
+ * Navigation model
+ *  - Top tabs + drawer sections = the business chains (Dashboard, Third parties, Products & stock,
+ *    Sales, Purchases, Expenses). Swipe or tap a tab to change chain.
+ *  - Each chain tab shows a screen with one card per entity of that chain.
+ *  - A card opens the list of that entity (full screen, back arrow).
+ *  - The drawer lists every chain AND its entities, so any entity is one tap away.
+ *
+ * Responsive chrome:  Compact -> modal drawer | Medium -> rail | Expanded -> permanent drawer.
+ *
+ * Data hooks (empty by default -> empty states are shown):
+ *   rowsFor(entityKey)  rows of an entity list      countFor(entityKey)  record count on the card
  */
 @Composable
-fun BizApp(widthClass: WindowWidthSizeClass) {
+fun BizApp(
+    widthClass: WindowWidthSizeClass,
+    rowsFor: @Composable (String) -> List<EntityRow> = { emptyList() },
+    countFor: @Composable (String) -> Int = { 0 },
+    recentInvoices: List<EntityRow> = emptyList()
+) {
     val navController = rememberNavController()
-    val backStack by navController.currentBackStackEntryAsState()
-    val current = Destinations.byRoute(backStack?.destination?.route)
+    val chains = Destinations.modules
+    val pagerState = rememberPagerState(pageCount = { chains.size })
+    val scope = rememberCoroutineScope()
 
-    val navigate: (String) -> Unit = { route ->
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+    val backStack by navController.currentBackStackEntryAsState()
+    val route = backStack?.destination?.route
+    val entity: EntityTab? =
+        if (route == ENTITY_ROUTE) backStack?.arguments?.getString("key")?.let { Destinations.entity(it) } else null
+
+    val openChain: (Int) -> Unit = { index ->
+        if (entity != null) navController.popBackStack(HOME, inclusive = false)
+        scope.launch { pagerState.animateScrollToPage(index) }
+    }
+    val openEntity: (String) -> Unit = { key ->
+        navController.navigate(entityRoute(key)) {
+            popUpTo(HOME)
             launchSingleTop = true
-            restoreState = true
         }
     }
 
     when (widthClass) {
         WindowWidthSizeClass.Compact -> {
             val drawerState = rememberDrawerState(DrawerValue.Closed)
-            val scope = rememberCoroutineScope()
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
                     ModalDrawerSheet {
-                        DrawerContent(current.route) { route ->
-                            navigate(route)
-                            scope.launch { drawerState.close() }
-                        }
+                        DrawerContent(
+                            chains = chains,
+                            selectedChain = pagerState.currentPage,
+                            selectedEntity = entity?.key,
+                            onChain = { openChain(it); scope.launch { drawerState.close() } },
+                            onEntity = { openEntity(it); scope.launch { drawerState.close() } }
+                        )
                     }
                 }
             ) {
-                AppContent(current, widthClass, navController, navigate) {
-                    scope.launch { drawerState.open() }
-                }
+                AppContent(
+                    widthClass, navController, pagerState, entity, openEntity,
+                    rowsFor, countFor, recentInvoices,
+                    onMenuClick = { scope.launch { drawerState.open() } }
+                )
             }
         }
 
         WindowWidthSizeClass.Medium -> {
             Row(Modifier.fillMaxSize()) {
-                AppRail(current.route, navigate)
-                AppContent(current, widthClass, navController, navigate, onMenuClick = null)
+                AppRail(chains, pagerState.currentPage, entity == null, openChain)
+                AppContent(
+                    widthClass, navController, pagerState, entity, openEntity,
+                    rowsFor, countFor, recentInvoices, onMenuClick = null
+                )
             }
         }
 
@@ -118,31 +159,44 @@ fun BizApp(widthClass: WindowWidthSizeClass) {
             PermanentNavigationDrawer(
                 drawerContent = {
                     PermanentDrawerSheet(Modifier.width(300.dp)) {
-                        DrawerContent(current.route, navigate)
+                        DrawerContent(chains, pagerState.currentPage, entity?.key, openChain, openEntity)
                     }
                 }
             ) {
-                AppContent(current, widthClass, navController, navigate, onMenuClick = null)
+                AppContent(
+                    widthClass, navController, pagerState, entity, openEntity,
+                    rowsFor, countFor, recentInvoices, onMenuClick = null
+                )
             }
         }
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Content: top bar + NavHost
+// Content: top bar + NavHost (home with chain tabs | entity list)
 // ---------------------------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppContent(
-    current: Module,
     widthClass: WindowWidthSizeClass,
     navController: NavHostController,
-    onNavigate: (String) -> Unit,
+    pagerState: PagerState,
+    entity: EntityTab?,
+    openEntity: (String) -> Unit,
+    rowsFor: @Composable (String) -> List<EntityRow>,
+    countFor: @Composable (String) -> Int,
+    recentInvoices: List<EntityRow>,
     onMenuClick: (() -> Unit)?
 ) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val chains = Destinations.modules
+
+    val onCreate: (String) -> Unit = { key ->
+        // TODO: navigate to your create/edit screen for this entity
+        scope.launch { snackbar.showSnackbar("New \"$key\" - plug your editor screen here") }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -150,17 +204,25 @@ private fun AppContent(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            current.group.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(current.title, fontWeight = FontWeight.SemiBold)
+                    if (entity != null) {
+                        Text(entity.title, fontWeight = FontWeight.SemiBold)
+                    } else {
+                        Column {
+                            Text(
+                                "BIZMANAGER",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(chains[pagerState.currentPage].title, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 },
                 navigationIcon = {
-                    if (onMenuClick != null) {
+                    if (entity != null) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                        }
+                    } else if (onMenuClick != null) {
                         IconButton(onClick = onMenuClick) { Icon(Icons.Outlined.Menu, "Open menu") }
                     }
                 },
@@ -188,31 +250,104 @@ private fun AppContent(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Destinations.DASHBOARD,
+            startDestination = HOME,
             modifier = Modifier.padding(padding)
         ) {
-            Destinations.modules.forEach { module ->
-                composable(module.route) {
-                    if (module.tabs.isEmpty()) {
-                        DashboardScreen(widthClass, onNavigate)
-                    } else {
-                        ModuleScreen(module, onCreate = { key ->
-                            // TODO: navigate to your create/edit screen for this entity
-                            scope.launch { snackbar.showSnackbar("New \"$key\" - plug your editor screen here") }
-                        })
-                    }
+            composable(HOME) {
+                HomeScreen(
+                    widthClass = widthClass,
+                    pagerState = pagerState,
+                    onOpenEntity = openEntity,
+                    onCreate = onCreate,
+                    countFor = countFor,
+                    recentInvoices = recentInvoices
+                )
+            }
+            composable(
+                route = ENTITY_ROUTE,
+                arguments = listOf(navArgument("key") { type = NavType.StringType })
+            ) { entry ->
+                val tab = entry.arguments?.getString("key")?.let { Destinations.entity(it) }
+                if (tab != null) {
+                    EntityListScreen(tab = tab, rows = rowsFor(tab.key), onCreate = onCreate)
                 }
             }
         }
     }
 }
 
+/** Chain tabs on top + swipeable pager of chain screens. */
+@Composable
+private fun HomeScreen(
+    widthClass: WindowWidthSizeClass,
+    pagerState: PagerState,
+    onOpenEntity: (String) -> Unit,
+    onCreate: (String) -> Unit,
+    countFor: @Composable (String) -> Int,
+    recentInvoices: List<EntityRow>
+) {
+    val chains = Destinations.modules
+    val scope = rememberCoroutineScope()
+
+    Column(Modifier.fillMaxSize()) {
+        ScrollableTabRow(
+            selectedTabIndex = pagerState.currentPage,
+            edgePadding = 12.dp,
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            chains.forEachIndexed { index, chain ->
+                LeadingIconTab(
+                    selected = pagerState.currentPage == index,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                    text = { Text(chain.title) },
+                    icon = { Icon(chain.icon, contentDescription = null) },
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) { page ->
+            val chain = chains[page]
+            if (chain.tabs.isEmpty()) {
+                DashboardScreen(
+                    widthClass = widthClass,
+                    onNavigate = { route ->
+                        scope.launch { pagerState.animateScrollToPage(Destinations.indexOfRoute(route)) }
+                    },
+                    recentInvoices = recentInvoices
+                )
+            } else {
+                ChainScreen(chain = chain, onOpenEntity = onOpenEntity, onCreate = onCreate, countFor = countFor)
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
-// Drawer (compact modal + expanded permanent)
+// Drawer (compact modal + expanded permanent): chains with their entities
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun DrawerContent(currentRoute: String, onNavigate: (String) -> Unit) {
+private fun DrawerContent(
+    chains: List<Module>,
+    selectedChain: Int,
+    selectedEntity: String?,
+    onChain: (Int) -> Unit,
+    onEntity: (String) -> Unit
+) {
+    val colors = NavigationDrawerItemDefaults.colors(
+        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+        selectedIconColor = MaterialTheme.colorScheme.primary,
+        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer
+    )
+
     Column(
         Modifier
             .verticalScroll(rememberScrollState())
@@ -221,28 +356,23 @@ private fun DrawerContent(currentRoute: String, onNavigate: (String) -> Unit) {
         DrawerHeader()
         Spacer(Modifier.height(12.dp))
 
-        Destinations.grouped.forEach { (group, modules) ->
-            Text(
-                group,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp)
+        chains.forEachIndexed { index, chain ->
+            NavigationDrawerItem(
+                label = { Text(chain.title, fontWeight = FontWeight.SemiBold) },
+                icon = { Icon(chain.icon, contentDescription = null) },
+                selected = selectedEntity == null && selectedChain == index,
+                onClick = { onChain(index) },
+                colors = colors,
+                modifier = Modifier.padding(top = 6.dp)
             )
-            modules.forEach { m ->
+            chain.tabs.forEach { tab ->
                 NavigationDrawerItem(
-                    label = { Text(m.title) },
-                    icon = { Icon(m.icon, contentDescription = null) },
-                    selected = m.route == currentRoute,
-                    onClick = { onNavigate(m.route) },
-                    badge = if (m.tabs.size > 1) {
-                        { Text("${m.tabs.size}", style = MaterialTheme.typography.labelMedium) }
-                    } else null,
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    modifier = Modifier.padding(vertical = 2.dp)
+                    label = { Text(tab.title, style = MaterialTheme.typography.bodyMedium) },
+                    icon = { Icon(tab.icon, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    selected = selectedEntity == tab.key,
+                    onClick = { onEntity(tab.key) },
+                    colors = colors,
+                    modifier = Modifier.padding(start = 28.dp)
                 )
             }
         }
@@ -297,11 +427,16 @@ private fun DrawerHeader() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Rail (medium)
+// Rail (medium): one item per chain
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun AppRail(currentRoute: String, onNavigate: (String) -> Unit) {
+private fun AppRail(
+    chains: List<Module>,
+    selectedChain: Int,
+    onHome: Boolean,
+    onChain: (Int) -> Unit
+) {
     NavigationRail(
         containerColor = MaterialTheme.colorScheme.surface,
         header = {
@@ -317,12 +452,12 @@ private fun AppRail(currentRoute: String, onNavigate: (String) -> Unit) {
             Modifier.verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Destinations.modules.forEach { m ->
+            chains.forEachIndexed { index, chain ->
                 NavigationRailItem(
-                    selected = m.route == currentRoute,
-                    onClick = { onNavigate(m.route) },
-                    icon = { Icon(m.icon, contentDescription = m.title) },
-                    label = { Text(m.title, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                    selected = onHome && selectedChain == index,
+                    onClick = { onChain(index) },
+                    icon = { Icon(chain.icon, contentDescription = chain.title) },
+                    label = { Text(chain.title, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                     alwaysShowLabel = true,
                     colors = NavigationRailItemDefaults.colors(
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer
