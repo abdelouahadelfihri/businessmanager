@@ -146,6 +146,8 @@ fun EntityRowItem(row: EntityRow, icon: ImageVector, modifier: Modifier = Modifi
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         val (avatar, title, subtitle, amount, status) = createRefs()
+        // Text on the left stops before whichever trailing item (amount / status) starts first
+        val trailingStart = createStartBarrier(amount, status)
 
         Box(
             Modifier
@@ -170,7 +172,7 @@ fun EntityRowItem(row: EntityRow, icon: ImageVector, modifier: Modifier = Modifi
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.constrainAs(title) {
                 start.linkTo(avatar.end, 12.dp)
-                end.linkTo(amount.start, 8.dp)
+                end.linkTo(trailingStart, 8.dp)
                 top.linkTo(parent.top)
                 width = Dimension.fillToConstraints
             }
@@ -184,35 +186,44 @@ fun EntityRowItem(row: EntityRow, icon: ImageVector, modifier: Modifier = Modifi
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.constrainAs(subtitle) {
                 start.linkTo(title.start)
-                end.linkTo(status.start, 8.dp)
+                end.linkTo(trailingStart, 8.dp)
                 top.linkTo(title.bottom, 3.dp)
                 width = Dimension.fillToConstraints
             }
         )
 
-        Text(
-            row.amount.orEmpty(),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            modifier = Modifier.constrainAs(amount) {
+        // Amount is optional: shown only when the entity has one (price, total, quantity...)
+        if (row.amount != null) {
+            Text(
+                row.amount,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.constrainAs(amount) {
+                    end.linkTo(parent.end)
+                    top.linkTo(parent.top)
+                }
+            )
+        } else {
+            Box(Modifier.constrainAs(amount) {
                 end.linkTo(parent.end)
                 top.linkTo(parent.top)
-            }
-        )
+            })
+        }
 
+        // Status chip is optional too; it sits under the amount, or at the top when there is no amount
         if (row.status != null) {
             StatusChip(
                 row.status, row.tone,
                 Modifier.constrainAs(status) {
                     end.linkTo(parent.end)
-                    top.linkTo(amount.bottom, 6.dp)
+                    if (row.amount != null) top.linkTo(amount.bottom, 6.dp) else top.linkTo(parent.top)
                 }
             )
         } else {
             Box(Modifier.constrainAs(status) {
                 end.linkTo(parent.end)
-                top.linkTo(amount.bottom)
+                top.linkTo(parent.top)
             })
         }
     }
