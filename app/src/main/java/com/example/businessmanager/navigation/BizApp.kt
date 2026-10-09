@@ -69,6 +69,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.businessmanager.ui.navigation.Destinations
+import com.example.businessmanager.ui.navigation.EntityTab
+import com.example.businessmanager.ui.navigation.Module
 import com.example.businessmanager.ui.screens.ChainScreen
 import com.example.businessmanager.ui.screens.DashboardScreen
 import com.example.businessmanager.ui.screens.EntityListScreen
