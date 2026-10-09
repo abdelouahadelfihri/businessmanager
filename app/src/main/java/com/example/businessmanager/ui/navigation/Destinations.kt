@@ -6,28 +6,33 @@ import androidx.compose.material.icons.outlined.ContactPage
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.RequestQuote
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Storefront
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Summarize
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Warehouse
-import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/** One tab = one entity list (backed by one DAO). `key` is used to pick the data source. */
-data class EntityTab(val key: String, val title: String, val icon: ImageVector)
+/** One entity (= one Room table + its DAO). `key` identifies it in routes and data sources. */
+data class EntityTab(
+    val key: String,
+    val title: String,
+    val icon: ImageVector,
+    val description: String = ""
+)
 
-/** One drawer / rail item. A module with several tabs shows a TabRow + swipeable pager. */
+/** One business chain (Sales, Purchases...). It is a top tab AND a drawer section. */
 data class Module(
     val route: String,
     val title: String,
-    val group: String,
     val icon: ImageVector,
-    val tabs: List<EntityTab> = emptyList()
+    val description: String = "",
+    val tabs: List<EntityTab> = emptyList()   // the entities of this chain
 )
 
 object Destinations {
@@ -39,55 +44,73 @@ object Destinations {
     const val EXPENSES = "expenses"
 
     val modules = listOf(
-        Module(DASHBOARD, "Dashboard", "Overview", Icons.Outlined.Dashboard),
+        Module(DASHBOARD, "Dashboard", Icons.Outlined.Dashboard, "Overview of your business"),
 
         Module(
-            THIRD_PARTIES, "Third parties", "Directory", Icons.Outlined.Groups,
+            THIRD_PARTIES, "Third parties", Icons.Outlined.Groups,
+            "Customers, suppliers and their contacts",
             tabs = listOf(
-                EntityTab("third_parties", "Third parties", Icons.Outlined.Groups),   // ThirdParty
-                EntityTab("contacts", "Contacts", Icons.Outlined.ContactPage)          // Contact
+                EntityTab("third_parties", "Third parties", Icons.Outlined.Groups,
+                    "Customers and suppliers (companies)"),                      // ThirdParty
+                EntityTab("contacts", "Contacts", Icons.Outlined.ContactPage,
+                    "People you deal with at each company")                      // Contact
             )
         ),
 
         Module(
-            PRODUCTS, "Products & stock", "Catalog", Icons.Outlined.Inventory2,
+            PRODUCTS, "Products & stock", Icons.Outlined.Inventory2,
+            "Catalog, warehouses and stock levels",
             tabs = listOf(
-                EntityTab("products", "Products", Icons.Outlined.Inventory2),          // Product
-                EntityTab("warehouses", "Warehouses", Icons.Outlined.Warehouse),       // Warehouse
-                EntityTab("stock", "Stock", Icons.Outlined.Layers),                    // ProductStock
-                EntityTab("movements", "Movements", Icons.Outlined.SwapVert)           // StockMovement
+                EntityTab("products", "Products", Icons.Outlined.Inventory2,
+                    "Products and services you sell or buy"),                    // Product
+                EntityTab("warehouses", "Warehouses", Icons.Outlined.Warehouse,
+                    "Places where your stock is stored"),                        // Warehouse
+                EntityTab("stock", "Stock", Icons.Outlined.Layers,
+                    "Quantity of each product per warehouse"),                   // ProductStock
+                EntityTab("movements", "Movements", Icons.Outlined.SwapVert,
+                    "History of stock in, out and transfers")                    // StockMovement
             )
         ),
 
         Module(
-            SALES, "Sales", "Trade", Icons.Outlined.Storefront,
+            SALES, "Sales", Icons.Outlined.Storefront,
+            "From quote to payment",
             tabs = listOf(
-                EntityTab("quotes", "Quotes", Icons.Outlined.RequestQuote),            // Quote (+ QuoteLine)
-                EntityTab("customer_orders", "Orders", Icons.Outlined.ShoppingCart),   // CustomerOrder (+ lines)
-                EntityTab("invoices", "Invoices", Icons.Outlined.Receipt),             // Invoice (+ InvoiceLine)
-                EntityTab("payments_in", "Payments", Icons.Outlined.Payments)          // Payment direction = IN
+                EntityTab("quotes", "Quotes", Icons.Outlined.RequestQuote,
+                    "Offers sent to customers, with their lines"),               // Quote + QuoteLine
+                EntityTab("customer_orders", "Orders", Icons.Outlined.ShoppingCart,
+                    "Confirmed customer orders, with their lines"),              // CustomerOrder + lines
+                EntityTab("invoices", "Invoices", Icons.Outlined.Receipt,
+                    "Customer invoices, with their lines"),                      // Invoice + InvoiceLine
+                EntityTab("payments_in", "Payments", Icons.Outlined.Payments,
+                    "Money received from customers")                             // Payment (IN) + allocations
             )
         ),
 
         Module(
-            PURCHASES, "Purchases", "Trade", Icons.Outlined.LocalShipping,
+            PURCHASES, "Purchases", Icons.Outlined.LocalShipping,
+            "From supplier order to payment",
             tabs = listOf(
-                EntityTab("supplier_orders", "Orders", Icons.Outlined.ShoppingCart),   // SupplierOrder (+ lines)
-                EntityTab("supplier_invoices", "Invoices", Icons.Outlined.Receipt),    // SupplierInvoice (+ lines)
-                EntityTab("payments_out", "Payments", Icons.Outlined.Payments)         // Payment direction = OUT
+                EntityTab("supplier_orders", "Orders", Icons.Outlined.ShoppingCart,
+                    "Orders placed with suppliers, with their lines"),           // SupplierOrder + lines
+                EntityTab("supplier_invoices", "Invoices", Icons.Outlined.Receipt,
+                    "Supplier invoices, with their lines"),                      // SupplierInvoice + lines
+                EntityTab("payments_out", "Payments", Icons.Outlined.Payments,
+                    "Money paid to suppliers")                                   // Payment (OUT) + allocations
             )
         ),
 
         Module(
-            EXPENSES, "Expenses", "Finance", Icons.Outlined.AccountBalanceWallet,
+            EXPENSES, "Expenses", Icons.Outlined.AccountBalanceWallet,
+            "Costs and expense reports",
             tabs = listOf(
-                EntityTab("expenses", "Expense reports", Icons.Outlined.Summarize)     // ExpenseReport (+ ExpenseLine)
+                EntityTab("expenses", "Expense reports", Icons.Outlined.Summarize,
+                    "Expense reports, with their lines")                         // ExpenseReport + ExpenseLine
             )
         )
     )
 
-    /** Group name -> modules, in declaration order (used for drawer section headers). */
-    val grouped: Map<String, List<Module>> get() = modules.groupBy { it.group }
+    fun entity(key: String): EntityTab? = modules.flatMap { it.tabs }.firstOrNull { it.key == key }
 
-    fun byRoute(route: String?): Module = modules.firstOrNull { it.route == route } ?: modules.first()
+    fun indexOfRoute(route: String): Int = modules.indexOfFirst { it.route == route }.coerceAtLeast(0)
 }
